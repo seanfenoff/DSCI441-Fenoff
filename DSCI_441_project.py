@@ -244,3 +244,24 @@ print('Train - CNN');
 print_report(y_train, y_train_preds_cnn, thresh)
 print('Test -- CNN');
 print_report(y_valid, y_valid_preds_cnn, thresh);
+
+##########     LSTM     ##########
+from keras.layers import Bidirectional, LSTM
+model_LSTM = Sequential()
+model_LSTM.add(Bidirectional(LSTM(64, input_shape=(X_train_cnn.shape[1], X_train_cnn.shape[2]))))
+model_LSTM.add(Dropout(rate=0.20))
+model_LSTM.add(Dense(1, activation = 'sigmoid'))
+model_LSTM.compile(
+    loss = 'binary_crossentropy', 
+    optimizer = 'adam', 
+    metrics = ['accuracy'])
+
+model.fit(X_train_cnn[:10000], y_train[:10000], batch_size=32, epochs=1, verbose=1)
+
+y_train_preds_lstm = model.predict(X_train_cnn[:10000], verbose=1)
+y_valid_preds_lstm = model.predict(X_valid_cnn, verbose=1)
+
+print('Train - LSTM');
+print_report(y_train[:10000], y_train_preds_lstm, thresh)
+print('Test -- LSTM'); 
+print_report(y_valid, y_valid_preds_lstm, thresh);
