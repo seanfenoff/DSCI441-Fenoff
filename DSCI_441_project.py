@@ -12,14 +12,23 @@ import pandas as pd
 #from dataprep.eda import create_report
 #from pandas_profiling import ProfileReport
 import numpy as np
-from os import listdir 
+#from os import listdir 
 import wfdb #This package will likely need to be pip installed.
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Dropout
-from keras.utils import to_categorical
+#from keras.utils import to_categorical
 from keras.layers import Conv1D
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, recall_score
+from sklearn.model_selection import train_test_split
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+from torch.optim.lr_scheduler import StepLR
 
 #specify data path to directory with full annotations
 path = 'mit-bih-arrhythmia-database-1.0.0/'
@@ -87,7 +96,7 @@ for v,c in zip(values, counts):
     print(v,c)
     
 #Let's view some of the abnormal beats
-ab_index = [b for a,b in zip(atr_sym, atr_samp) if a in arry][:10]
+ab_index = [b for a,b in zip(atr_sym, atr_samp) if a in arry][:20]
 print(ab_index)
 
 x = np.arange(len(p_sig))
@@ -107,7 +116,7 @@ plt.legend(bbox_to_anchor = (1.04, 1), loc = 'upper left')
 plt.show()
 
 # Now we actually have to split the dataset into individual beats. 
-def make_dataset(pts, num_sec, fs, arry):
+def make_dataset(patients, num_sec, fs, arry):
     #Need to make the dataset, but ignore non-beats (not useful to us)
     #Inputs are patients, num of sec we want before/after beat
     # frequency (fs)
@@ -124,7 +133,7 @@ def make_dataset(pts, num_sec, fs, arry):
     # we will have different number of beats for each patient
     max_rows = []
     
-    for pt in pts:
+    for pt in patients:
         file = path + pt
         p_sig, atr_sym, atr_samp = load_ecg(file)
         
@@ -223,7 +232,7 @@ print(X_valid_cnn.shape)
 
 model = Sequential()
 model.add(Conv1D(filters=128, kernel_size=5, activation = 'relu', input_shape = (2160,1)))
-model.add(Dropout(rate=0.20))
+model.add(Dropout(rate=0.25))
 model.add(Flatten())
 model.add(Dense(1, activation = 'sigmoid'))
 
@@ -233,7 +242,7 @@ model.compile(
     optimizer = 'adam', 
     metrics = ['accuracy'])
 
-model.fit(X_train_cnn, y_train, batch_size=32, epochs=1, verbose=1)
+model.fit(X_train_cnn, y_train, batch_size = 1, epochs=1, verbose=1)
 
 y_train_preds_cnn = model.predict(X_train_cnn, verbose=1)
 y_valid_preds_cnn =  model.predict(X_valid_cnn, verbose=1)
@@ -256,12 +265,156 @@ model_LSTM.compile(
     optimizer = 'adam', 
     metrics = ['accuracy'])
 
-model.fit(X_train_cnn[:10000], y_train[:10000], batch_size=32, epochs=1, verbose=1)
+model_LSTM.fit(X_train_cnn, y_train, batch_size=32, epochs=2, verbose=1)
 
-y_train_preds_lstm = model.predict(X_train_cnn[:10000], verbose=1)
-y_valid_preds_lstm = model.predict(X_valid_cnn, verbose=1)
+y_train_preds_lstm = model_LSTM.predict(X_train_cnn, verbose=1)
+y_valid_preds_lstm = model_LSTM.predict(X_valid_cnn, verbose=1)
 
 print('Train - LSTM');
-print_report(y_train[:10000], y_train_preds_lstm, thresh)
+print_report(y_train, y_train_preds_lstm, thresh)
 print('Test -- LSTM'); 
 print_report(y_valid, y_valid_preds_lstm, thresh);
+
+test_list = [X_valid_cnn[1]]
+model_LSTM.predict(test_list)
+y_train_int = [int(x) for x in y_train]
+val, con = np.unique(y_train_int, return_counts=True)
+for v, c in zip(val,con):
+    print(v,c)
+   
+#### Working with original data set. I believe the above is not functioning correctly. 
+# First upload the data set into Python
+train = pd.read_csv("mitbih_train.csv", header=None)
+
+# See preliminary dataframe size
+print(data.size)
+
+# Set the target variable (this is the last column of numbers in the DF)
+train_y = train.iloc[:, -1]
+train_y = train_y.astype('int')
+train_y.head()
+# Set the rest of the columns as the x-variables (all other)
+train_x = train.iloc[:, :-1]
+train_x.head()
+# Set to floats
+train_x = train_x.astype('float')
+train_x.head()
+# Finding the occurences of each type of beat classification. 
+unique, counts = np.unique(train_y, return_counts=True)
+print(f'unique values: {unique}')
+print(f'counts: {counts}')
+# Create dict so that each unique classification goes with class name.
+class_names = {0: 'N', 1: 'S', 2: 'V', 3: 'F', 4: 'Q'}
+#plot the first 5 ecg signals in the dataset and their corresponding labels 
+fig, ax = plt.subplots(5, 1, figsize=(20, 10))
+for i in range(5):
+    ax[i].plot(train_x.iloc[i, :])
+    ax[i].set_title(f'Label: {class_names[train_y[i]]}')
+    ax[i].set_xlabel('Time (ms)')
+    ax[i].set_ylabel('Amplitude (mV)')
+    
+X_np = train_x.to_numpy()
+X_np.shape
+
+# Add a channel dimension
+X_np = X_np.reshape(-1, 1, 187)
+X_np.shape
+y_np = train_y.to_numpy()
+y_np = y_np.reshape(-1, 1)
+y_np.shape
+
+#We need to normalize the data. 
+x_mean = X_np.mean()
+x_std = X_np.std()
+x_max = X_np.max()
+X_min = X_np.min()
+print('Mean before normalization: ', x_mean)
+print('STD: ', x_std)
+print('max :', x_max)
+
+x_norm = X_np - x_mean
+x_norm *= 1/x_std
+
+print(x_norm.shape)
+print('New mean is: ', x_norm.mean())
+print('New std is: ', x_norm.std())
+
+# Now let's visualize the new normalized data
+fig, ax = plt.subplots(5, 1, figsize=(20, 10))
+for i in range(5):
+    ax[i].plot(x_norm[i,0,:])
+    ax[i].set_title(f'Label: {class_names[train_y[i]]};')
+    ax[i].set_xlabel('Time (ms)')
+    ax[i].set_ylabel('mV')
+    
+fig, ax = plt.subplots(1, 1, figsize=(20,10))
+ax.hist(x_norm.flatten(), bins=100)
+ax.set_title(f'Distribution of data')
+ax.set_xlabel('Time (ms)')
+ax.set_ylabel('mV')
+
+np.savetxt('x_norm.csv', x_norm.squeeze(), delimiter=',')
+np.savetxt('y_np.csv', y_np, delimiter=',')
+
+x_norm = np.loadtxt('x_norm.csv', delimiter=',').reshape(-1,1,187)
+y_np = np.loadtxt('y_np.csv', delimiter=',').reshape(-1,1)
+print(x_norm.shape)
+print(y_np.shape)
+y_np = y_np.astype('int')
+y_np.dtype
+
+#Split into train and testing sets
+X_train, X_test, y_train, y_test = train_test_split(x_norm, y_np, test_size=0.25, shuffle=True)
+
+#There is class imbalances here. We may need to balance the data. 
+print(f'Frequency of each class in the train set')
+unique, counts = np.unique(y_train, return_counts=True)
+for i in range(len(unique)):
+    print(f'{class_names[unique[i]]}: {counts[i]}')
+print(f'Frequency of each class in the test set')
+unique, counts = np.unique(y_test, return_counts=True)
+for i in range(len(unique)):
+    print(f'{class_names[unique[i]]}: {counts[i]}')
+    
+h_params = {'bs': 1024, 
+            'lr': 1e-3,
+            'lr_decay': 0.3,
+            'epochs': 50}
+
+train_ds = torch.utils.data.TensorDataset(torch.from_numpy(X_train).float(), torch.from_numpy(y_train).long())
+test_ds = torch.utils.data.TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_test).long())
+
+len(train_ds), len(test_ds)
+# Here I compute the weights od the class by inversion and normalization
+class_dist = np.unique(y_train, return_counts=True)[1]
+class_dist = class_dist/np.sum(class_dist)
+weights = 1/class_dist
+weights = weights/weights.sum()
+weights, class_names
+# Assign weights from above the training set
+data_weights = np.zeros(y_train.shape[0])
+for i in range(y_train.shape[0]):
+    data_weights[i] = weights[y_train[i,0]]
+data_weights[:10]
+#
+train_dl = DataLoader(train_ds, batch_size=h_params['bs'], 
+                      sampler=WeightedRandomSampler(weights=data_weights, num_samples=len(y_train), 
+                                                    replacement=True))
+test_dl = DataLoader(test_ds, batch_size=h_params['bs'])
+#class distribs in dataloader, want to make sure they are uniform
+for batch in train_dl:
+    print(batch[1].shape)
+    unique, counts = np.unique(batch[1], return_counts=True)
+    for i in range(len(unique)):
+        print(f'{class_names[unique[i]]}: {counts[i]}')
+    break
+# Lets examine a few random samples from the batch now
+x, y = next(iter(train_dl))
+fig, ax = plt.subplots(5,1,figsize=(20,10))
+for i in range(5):
+    ax[i].plot(x[i,0,:])
+    ax[i].set_title(f'Label: {class_names[y[i].item()]}')
+    ax[i].set_xlabel('Time (ms)')
+    ax[i].set_ylabel('mV')
+    
+        
