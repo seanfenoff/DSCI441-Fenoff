@@ -379,7 +379,7 @@ for i in range(len(unique)):
 h_params = {'bs': 1024, 
             'lr': 1e-3,
             'lr_decay': 0.3,
-            'epochs': 50}
+            'epochs': 20}
 
 train_ds = torch.utils.data.TensorDataset(torch.from_numpy(X_train).float(), torch.from_numpy(y_train).long())
 test_ds = torch.utils.data.TensorDataset(torch.from_numpy(X_test).float(), torch.from_numpy(y_test).long())
@@ -417,4 +417,102 @@ for i in range(5):
     ax[i].set_xlabel('Time (ms)')
     ax[i].set_ylabel('mV')
     
-        
+def nin_block(in_channels, out_channels, kernel_size, padding, strides):
+    return nn.Sequential(nn.Conv1d(in_channels, out_channels, kernel_size, strides, padding), 
+                         nn.BatchNorm1d(out_channels), 
+                         nn.GELU(), 
+                         nn.Conv1d(out_channels, out_channels, kernel_size=1),
+                         nn.GELU(),
+                         nn.Conv1d(out_channels, out_channels, kernel_size=1), 
+                         nn.GELU()
+                         )
+
+def get_model():
+    return nn.Sequential(nin_block(1, 48, kernel_size=11, strides=4, padding=0), 
+                         nn.MaxPool1d(3, stride=2), 
+                         nin_block(48, 128, kernel_size=5, strides=1, padding=2), 
+                         nn.MaxPool1d(3, stride=2), 
+                         nin_block(128, 256, kernel_size=3, strides=1, padding=1), 
+                         nn.MaxPool1d(3, stride=2), 
+                         nn.Dropout(0.4), 
+                         nin_block(256, 5, kernel_size=3, strides=1, padding=1), 
+                         nn.AdaptiveAvgPool1d(1), 
+                         nn.Flatten())
+model=get_model()
+    
+print(f'Model size: {sum(p.numel() for p in model.parameters() if p.requires_grad)*4/(1024**2)} MB')
+print(f'Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}')
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device
+model = model.to(device)
+class_names
+
+criterion = nn.CrossEntropyLoss(weight=torch.tensor([1, 1.1, 2.5, 3, 1], 
+                                                    dtype=torch.float, 
+                                                    device=device))
+optimizer = torch.optim.Adam(model.parameters(), lr=h_params['lr'])
+lr_scheduler = StepLR(optimizer, step_size=10, gamma=h_params['lr_decay'], verbose=True)
+
+from copy import deepcopy
+
+def train(model, criterion, optimizer, train_dl, test_dl, epochs, lr_scheduler: StepLR=None):
+    train_losses = []
+    test_losses = []
+    best_model_params = deepcopy(model.state_dict())
+    best_accuracy = 0.0
+    for epoch in range(epochs):
+        print(f'Epoch {epoch+1}/{epochs}')
+        print('-'*10)
+        train_loss = 0
+        test_loss = 0
+        model.train()
+        for x, y in train_dl:
+            x = x.to(device)
+            y = y.to(device)
+            optimizer.zero_grad()
+            output = model(x)
+            loss = criterion(output, y.squeeze())
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item()*x.size(0)
+        train_loss = train_loss/len(train_dl.dataset)
+        train_losses.append(train_loss)
+        lr_scheduler.step()
+        model.eval()
+        corrects=0
+        for x, y in test_dl:
+            x = x.to(device)
+            y = y.to(device)
+            output = model(x)
+            loss = criterion(output, y.squeeze())
+            test_loss += loss.item()*x.size(0)
+            corrects += torch.sum(torch.argmax(output, dim=1) == y.squeeze()).item()
+        test_loss = test_loss/len(test_dl.dataset)
+        accuracy = corrects/len(test_dl.dataset)
+        test_losses.append(test_loss)
+        print(f'Train Loss: {train_loss:.4f} \t Test Loss: {test_loss:.4f} \t Test Accuracy: {accuracy:.4f}')
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy 
+            best_model_params = deepcopy(model.state_dict())
+    print('Finishing Training and best accuracy is: {:.4f}'.format(best_accuracy))
+    return train_losses, test_losses, best_model_params, best_accuracy
+            
+train_losses, test_losses, best_model_params, best_accuracy = train(model,
+                                                                    criterion, 
+                                                                    optimizer, 
+                                                                    train_dl, 
+                                                                    test_dl, 
+                                                                    h_params['epochs'], 
+                                                                    lr_scheduler)
+
+plt.plot(np.convolve(train_losses, np.ones(3)/3, mode='valid'), label='train')
+plt.plot(np.convolve(test_losses, np.ones(3)/3, mode='valid'), label='test')
+plt.legend()
+plt.x_label('Epochs')
+plt.y_label('Loss')
+plt.show()
+
+
+
+
