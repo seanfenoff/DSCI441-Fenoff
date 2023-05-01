@@ -14,7 +14,7 @@ import wfdb #This package will likely need to be pip installed.
 import matplotlib.pyplot as plt
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Dropout
-from keras.layers import Bidirectional, LSTM
+from keras.layers import Bidirectional, LSTM, Dense, Dropout, Embedding
 from keras.utils import to_categorical
 from keras.layers import Conv1D
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, recall_score
@@ -29,6 +29,7 @@ from sklearn.metrics import classification_report
 from torch.optim.lr_scheduler import StepLR
 from copy import deepcopy
 import seaborn as sns
+from sklearn.metrics import classification_report
 
 # #specify data path to directory with full annotations
 # path = 'mit-bih-arrhythmia-database-1.0.0/'
@@ -589,31 +590,27 @@ model.load_state_dict(torch.load('best_model0.99.pt'))
 plot_cm(model, test_dl, class_names)
 
 ### Now we want to create the LSTM Model ###
-model_LSTM2 = Sequential()
-model_LSTM2.add(Bidirectional(LSTM(64, input_shape=(X_train.shape,[1], X_train.shape[2]))))
-model_LSTM2.add(Dropout(rate=0.20))
-model_LSTM2.add(Dense(1, activation = 'sigmoid'))
-model_LSTM2.compile(loss='binary_crossentropy', 
+model2 = Sequential()
+model2.add(Bidirectional(LSTM(64, input_shape=(X_train.shape[1], X_train.shape[2]))))
+model2.add(Dropout(0.25))
+model2.add(Dense(1, activation = 'sigmoid'))
+model2.compile(loss='categorical_crossentropy', 
                     optimizer = 'adam', 
                     metrics = ['accuracy'])
 
-model_LSTM2.fit(X_train, y_train, batch_size=32, epochs=1, verbose=1)
+model2.fit(X_train, y_train, batch_size=16, epochs=3, verbose=1)
 
-np.unique(y_train)
 
-y_train_preds = model_LSTM2.predict(X_train, verbose=1)
-y_val_preds = model_LSTM2.predict(X_test_np, verbose =1)
+y_train_preds = model2.predict(X_train, verbose=1)
+y_val_preds = model2.predict(X_test_np, verbose =1)
 
-thresh = (sum(y_train)/len(y_train))[0]
+y_train_preds = y_train_preds.astype(int)
+y_val_preds = y_val_preds.astype(int)
+np.unique(y_train_preds)
+np.unique(y_val_preds)
 
-print('New LSTM');
-print_report(y_train, y_train_preds, thresh)
-print('Valid');
-print_report(y_test_np, y_val_preds, thresh)
+classification_report(y_train, y_train_preds, digits=2)
 
-from sklearn.metrics import classification_report
-classification_report(y_train, y_train_preds)
 
-print(y_train_preds)
 
 
