@@ -12,23 +12,23 @@ import pandas as pd
 import numpy as np
 import wfdb #This package will likely need to be pip installed.
 import matplotlib.pyplot as plt
+from copy import deepcopy
 from keras.models import Sequential
 from keras.layers import Dense, Flatten, Dropout
 from keras.layers import Bidirectional, LSTM, Dense, Dropout, Embedding
-from keras.utils import to_categorical
+from keras.utils import to_categorical, np_utils
 from keras.layers import Conv1D
-from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, recall_score
-from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import classification_report
 from torch.optim.lr_scheduler import StepLR
-from copy import deepcopy
 import seaborn as sns
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, recall_score, mean_squared_error
+from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
 
 # #specify data path to directory with full annotations
@@ -590,26 +590,58 @@ model.load_state_dict(torch.load('best_model0.99.pt'))
 plot_cm(model, test_dl, class_names)
 
 ### Now we want to create the LSTM Model ###
+# We must start by encode the classing values as 0 and 1 integers. 
+encoder = LabelEncoder()
+encoder.fit(y_train)
+encoded_y = encoder.transform(y_train)
+dummy_y = np_utils.to_categorical(encoded_y)
+
+encoder.fit(y_val)
+encoded_yval = encoder.transform(y_val)
+dummy_yval = np_utils.to_categorical(encoded_yval)
+
 model2 = Sequential()
 model2.add(Bidirectional(LSTM(64, input_shape=(X_train.shape[1], X_train.shape[2]))))
 model2.add(Dropout(0.25))
-model2.add(Dense(1, activation = 'sigmoid'))
+model2.add(Dense(5, activation = 'softmax'))
 model2.compile(loss='categorical_crossentropy', 
                     optimizer = 'adam', 
                     metrics = ['accuracy'])
 
-model2.fit(X_train, y_train, batch_size=16, epochs=3, verbose=1)
+model2.fit(X_train, dummy_y, batch_size=16, epochs=10, verbose=1)
 
 
 y_train_preds = model2.predict(X_train, verbose=1)
-y_val_preds = model2.predict(X_test_np, verbose =1)
+y_val_preds = model2.predict(X_val, verbose =1)
 
-y_train_preds = y_train_preds.astype(int)
-y_val_preds = y_val_preds.astype(int)
-np.unique(y_train_preds)
-np.unique(y_val_preds)
+#Round to nearest integer for predictions.
+y_train_preds_int = (np.rint(y_train_preds)).astype(int)
+y_val_preds_int = (np.rint(y_val_preds)).astype(int)
 
-classification_report(y_train, y_train_preds, digits=2)
+
+class_1 = classification_report(dummy_y, y_train_preds_int, digits=2)
+class_2 = classification_report(dummy_yval, y_val_preds_int, digits =2)
+
+# Now let's perform on Test Set
+encoder.fit(y_test_np)
+encoded_ytest= encoder.transform(y_test_np)
+dummy_ytest = np_utils.to_categorical(encoded_ytest)
+
+y_test_preds = model2.predict(X_test_np, verbose =1)
+y_test_preds_int = (np.rint(y_test_preds)).astype(int)
+class_test = classification_report(dummy_ytest, y_test_preds_int, digits=2)
+
+cm = confusion_matrix(np.asarray(dummy_ytest).argmax(axis=1), np.asarray(y_test_preds_int).argmax(axis=1))
+cm_df = pd.DataFrame(cm, 
+                     index = ['N', 'S', 'V', 'F', 'Q'], 
+                     columns = ['N', 'S', 'V', 'F', 'Q'])
+#Plotting the confusion matrix
+plt.figure(figsize=(10,8))
+sns.heatmap(cm_df, annot=True, fmt =',d')
+plt.title('Confusion Matrix')
+plt.ylabel('Actal Values')
+plt.xlabel('Predicted Values')
+plt.show()
 
 
 
