@@ -28,5 +28,5 @@ if st.checkbox('Show dataframe'):
        np.random.randn(20, 3),
        columns=['a', 'b', 'c'])
 
-    chart_data
+    st.line_chart(data=chart_data)
     
