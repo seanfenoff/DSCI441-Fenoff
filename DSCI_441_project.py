@@ -518,7 +518,7 @@ model = get_model().to(device=device)
 model.load_state_dict(torch.load('best_model0.99.pt'))
 ## Confusion matrix
 
-def plot_cm(model, dl, cat, normalize='true'):
+def plot_cm(model, dl, cat, normalize=None):
     model.eval()
     y_pred=[]
     y_true=[]
@@ -529,11 +529,13 @@ def plot_cm(model, dl, cat, normalize='true'):
         y_pred.extend(torch.argmax(output, dim=1).cpu().numpy())
         y_true.extend(y.cpu().numpy())
     cm = confusion_matrix(y_true, y_pred, normalize=normalize)
-    sns.heatmap(cm, annot=True, fmt='.2f', cmap='Blues', xticklabels=cat.values(), yticklabels=cat.values())
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
+    plt.figure(figsize=(10,8))
+    sns.heatmap(cm, annot=True, fmt=',d', cmap='Blues', xticklabels=cat.values(), yticklabels=cat.values())
+    plt.xlabel('Predicted Values')
+    plt.ylabel('True Values')
+    plt.title("Confusion Matrix")
     plt.show()
-    print(classification_report(y_true, y_pred, target_names=class_names.values()))
+    print(classification_report(y_true, y_pred, target_names=class_names.values(), digits=4))
     
 plot_cm(model, val_dl, class_names)
 
@@ -629,7 +631,7 @@ dummy_ytest = np_utils.to_categorical(encoded_ytest)
 
 y_test_preds = model2.predict(X_test_np, verbose =1)
 y_test_preds_int = (np.rint(y_test_preds)).astype(int)
-class_test = classification_report(dummy_ytest, y_test_preds_int, digits=2)
+class_test = classification_report(dummy_ytest, y_test_preds_int, digits=4)
 
 cm = confusion_matrix(np.asarray(dummy_ytest).argmax(axis=1), np.asarray(y_test_preds_int).argmax(axis=1))
 cm_df = pd.DataFrame(cm, 
@@ -637,12 +639,11 @@ cm_df = pd.DataFrame(cm,
                      columns = ['N', 'S', 'V', 'F', 'Q'])
 #Plotting the confusion matrix
 plt.figure(figsize=(10,8))
-sns.heatmap(cm_df, annot=True, fmt =',d')
+sns.heatmap(cm_df, annot=True, fmt =',d', cmap='Blues')
 plt.title('Confusion Matrix')
 plt.ylabel('Actal Values')
 plt.xlabel('Predicted Values')
 plt.show()
-
 
 
 
