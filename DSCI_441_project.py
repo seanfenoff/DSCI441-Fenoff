@@ -24,6 +24,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
 from torch.optim.lr_scheduler import StepLR
+import tensorflow as tf
+from tensorflow import keras
 import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
@@ -611,6 +613,8 @@ model2.compile(loss='categorical_crossentropy',
                     metrics = ['accuracy'])
 
 model2.fit(X_train, dummy_y, batch_size=16, epochs=10, verbose=1)
+
+tf.saved_model.save(model2, '/Users/smfen/Documents/Lehigh Graduate School/Lehigh Spring 2023/DSCI 441 -- Stat. and ML/Project')
 
 
 y_train_preds = model2.predict(X_train, verbose=1)
