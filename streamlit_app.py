@@ -67,5 +67,5 @@ test_df = pd.read_csv(uploaded_file, header=None)
 # X_test_np = features_df.to_numpy()
 # X_test_np = np.reshape(X_test_np, (X_test_np.shape[0], 1, X_test_np.shape[1]))
 
-model = tf.saved_model.load('/Users/smfen/Documents/Lehigh Graduate School/Lehigh Spring 2023/DSCI 441 -- Stat. and ML/Project/streamlit_model')
-model.predict(test_df, verbose=1)
+# model = tf.saved_model.load('/Users/smfen/Documents/Lehigh Graduate School/Lehigh Spring 2023/DSCI 441 -- Stat. and ML/Project/streamlit_model')
+# model.predict(test_df, verbose=1)
