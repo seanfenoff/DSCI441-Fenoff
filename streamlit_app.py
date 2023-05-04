@@ -10,62 +10,34 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+from tensorflow import keras
 
-st.write("Electrocardiogram Arrythmia Detection using Long-Short Term Memory Networks")
-st.write("This app will allow you to choose a testing input and it will output an arrythmia classification")
-
-# train = pd.read_csv("mitbih_train.csv", header=None)
-# train_y = train.iloc[:, -1]
-# train_y = train_y.astype('int')
-# train_x = train.iloc[:, :-1]
-# train_x = train_x.astype('float')
-# unique, counts = np.unique(train_y, return_counts=True)
-# print(f'unique values: {unique}')
-# print(f'counts: {counts}')
-# class_names = {0: 'N', 1: 'S', 2: 'V', 3: 'F', 4: 'Q'}
-
-if st.checkbox('Show Example plot of Sinus Rythm - N'):
-    chart_data = pd.DataFrame(
-       np.random.randn(20, 3),
-       columns=['a', 'b', 'c'])
-
-    st.line_chart(data=chart_data)
-
-if st.checkbox('Show Example plot of Superventricular Premature - S'):
-    chart_data = pd.DataFrame(
-       np.random.randn(20, 3),
-       columns=['a', 'b', 'c'])
-
-    st.line_chart(data=chart_data)
-
-if st.checkbox('Show Example plot of Ventricular Premature - V'):
-    chart_data = pd.DataFrame(
-       np.random.randn(20, 3),
-       columns=['a', 'b', 'c'])
-
-    st.line_chart(data=chart_data)
-    
-if st.checkbox('Show Example plot of Ventricular Fusion - F'):
-    chart_data = pd.DataFrame(
-       np.random.randn(20, 3),
-       columns=['a', 'b', 'c'])
-
-    st.line_chart(data=chart_data)
-
-if st.checkbox('Show Example plot of Unclassifiable - Q'):
-    chart_data = pd.DataFrame(
-       np.random.randn(20, 3),
-       columns=['a', 'b', 'c'])
-
-    st.line_chart(data=chart_data)
+st.title("Arrhythmia Classification from Electrocardiograms using Long-Short Term Memory Networks")
+st.write("This app will allow you to choose a testing input (single beat .csv file) and it will output an arrythmia classification.")
     
 uploaded_file = st.file_uploader("Choose input file for classification.")
 
-test_df = pd.read_csv(uploaded_file, header=None)
-# features_df = test_df.iloc[:,:-1]
-# features_df = features_df.astype('float32')
-# X_test_np = features_df.to_numpy()
-# X_test_np = np.reshape(X_test_np, (X_test_np.shape[0], 1, X_test_np.shape[1]))
 
-# model = tf.saved_model.load('/Users/smfen/Documents/Lehigh Graduate School/Lehigh Spring 2023/DSCI 441 -- Stat. and ML/Project/streamlit_model')
-# model.predict(test_df, verbose=1)
+model = keras.models.load_model('/Users/smfen/Documents/Lehigh Graduate School/Lehigh Spring 2023/DSCI 441 -- Stat. and ML/Project/streamlit_model')
+
+
+if uploaded_file != 'NoneType':
+    test_df = pd.read_csv(uploaded_file, header=None)
+    features_df = test_df.iloc[:,:-1]
+    features_df = features_df.astype('float32')
+    X_test_np = features_df.to_numpy()
+    X_test_np = np.reshape(X_test_np, (X_test_np.shape[0], 1, X_test_np.shape[1]))
+    prediction = model.predict(X_test_np, verbose=1)
+    prediction = (np.rint(prediction)).astype('int')
+    zero = prediction[0][0]
+    one = prediction[0][1]
+    two = prediction[0][2]
+    three = prediction[0][3]
+    four = prediction[0][4]
+    if zero == 1: pred = 'N - Sinus Rhythm'
+    if one == 1: pred = 'S - Superventricular Premature'
+    if two == 1: pred = 'V - Ventricular Premature'
+    if three == 1: pred = 'F - Ventricular Fusion'
+    if four == 1: pred = 'Q - Unclassifiable'
+
+    st.write('The predicted arrhythmia is: ', pred)
