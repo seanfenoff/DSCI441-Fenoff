@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 st.title("Arrhythmia Classification from Electrocardiograms using Long-Short Term Memory Networks")
 st.header("This app will allow you to choose a testing input (single beat CSV file) and it will output an arrythmia classification.")
     
-uploaded_file = st.file_uploader("Choose input file for classification.")
+uploaded_file = st.file_uploader("Choose the input file for classification.")
 
 
 if uploaded_file is not None:
