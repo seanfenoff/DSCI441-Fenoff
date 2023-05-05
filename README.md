@@ -12,5 +12,5 @@ into training and testing sets and some exploratory signal analysis was complete
 
 Then a CNN was trained and evaluated, and then the same for the LSTM model. 
 
-Eventually I plan to used this code in a StreamLit application, so an example 
-ECG could be input and the arrhythmia classification would output.  
+This code was then used to create a Streamlit app for prediction cardiac
+arrythmias. 
